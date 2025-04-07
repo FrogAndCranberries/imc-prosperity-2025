@@ -16,5 +16,5 @@ midprice = df[(df["product"] == PRODUCT)]["mid_price"]
 print(len(midprice))
 
 midprice.plot()
-plt.savefig('plots/plot.png')
+plt.savefig('plot.png')
 plt.show()
