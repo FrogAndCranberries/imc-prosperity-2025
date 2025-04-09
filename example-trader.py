@@ -1,6 +1,13 @@
 from datamodel import OrderDepth, UserId, TradingState, Order
 from typing import List
 import string
+import jsonpickle
+
+
+# class TraderData:
+#     def __init__(self, average_price:int, num_rounds:int):
+#         self.average_price = average_price
+        # self.num_rounds = num_rounds
 
 class Trader:
     
@@ -9,10 +16,22 @@ class Trader:
         print("traderData: " + state.traderData)
         print("Observations: " + str(state.observations))
         result = {}
+        
+        traderData : dict[str,list[int]] = jsonpickle.decode(traderData)
+
         for product in state.order_depths:
             order_depth: OrderDepth = state.order_depths[product]
             orders: List[Order] = []
-            acceptable_price = 10;  # Participant should calculate this value
+
+            curr_price = sum([x.price for x in state.market_trades[product]])/len(state.market_trades[product])
+            productPrices = traderData[product] + [curr_price]
+
+            
+            avg_price = sum(productPrices ) / len(productPrices)
+
+
+
+            acceptable_price = avg_price;  # Participant should calculate this value
             print("Acceptable price : " + str(acceptable_price))
             print("Buy Order depth : " + str(len(order_depth.buy_orders)) + ", Sell order depth : " + str(len(order_depth.sell_orders)))
     
@@ -29,9 +48,11 @@ class Trader:
                     orders.append(Order(product, best_bid, -best_bid_amount))
             
             result[product] = orders
+            traderData[product] = productPrices
+
     
     
-        traderData = "SAMPLE" # String value holding Trader state data required. It will be delivered as TradingState.traderData on next execution.
+        traderData = jsonpickle.encode(traderData) # String value holding Trader state data required. It will be delivered as TradingState.traderData on next execution.
         
         conversions = 1
         return result, conversions, traderData
