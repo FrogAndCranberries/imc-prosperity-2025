@@ -1,10 +1,11 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
-
+import matplotlib
+matplotlib.use("TkAgg")
 DAY = 0
 
-PRODUCT = "KELP"
+PRODUCT = "RAINFOREST_RESIN"
 
 csv_path = f"./round-1-island-data-bottle/prices_round_1_day_{DAY}.csv"
 
@@ -18,3 +19,4 @@ print(len(midprice))
 midprice.plot()
 plt.savefig('plot.png')
 plt.show()
+
