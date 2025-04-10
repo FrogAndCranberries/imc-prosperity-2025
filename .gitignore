@@ -3,3 +3,4 @@
 venv
 plots
 __pycache__
+backtests/*.log
