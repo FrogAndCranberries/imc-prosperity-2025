@@ -20,7 +20,7 @@ class Trader:
         "PICNIC_BASKET1": {
             "CROISSANTS": 6,
             "JAMS": 3,
-            "DJEMBE": 1},
+            "DJEMBES": 1},
 
         "PICNIC_BASKET2": {
             "CROISSANTS": 4,
@@ -86,6 +86,7 @@ class Trader:
             orders: List[Order] = []
 
             # Check all components and basket are available
+            skip_arbitrage = False
             for product in list(self.BASKET_CONTENTS[basket].keys()) + [basket]:
                 if len(state.order_depths[product].sell_orders) == 0 and len(state.order_depths[product].buy_orders) == 0:
                     skip_arbitrage = True
@@ -93,7 +94,7 @@ class Trader:
                 continue
 
             # Get midprice spread
-            assembled_midprice = sum([self.BASKET_CONTENTS[basket][component] * midprices[component] for component in self.BASKET_CONTENTS[basket].keys])
+            assembled_midprice = sum([self.BASKET_CONTENTS[basket][component] * midprices[component] for component in self.BASKET_CONTENTS[basket].keys()])
             midprice_spread = midprices[basket] - assembled_midprice
 
             # If we're long on basket and spread is closing, sell position. If spread is still negative, buy more
