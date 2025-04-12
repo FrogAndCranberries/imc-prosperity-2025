@@ -1,4 +1,4 @@
-# This code is the sole property and creation of Ediz Ucar
+# This code is the sole property and creation of the cuckboy programmer Ediz Ucar and the legendary team that carried him all the way
 
 
 from datamodel import OrderDepth, UserId, TradingState, Order, Symbol
