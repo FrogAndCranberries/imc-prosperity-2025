@@ -1,13 +1,6 @@
 from datamodel import OrderDepth, UserId, TradingState, Order, Symbol
 from typing import List
-import string
 import jsonpickle
-
-
-# class TraderData:
-#     def __init__(self, average_price:int, num_rounds:int):
-#         self.average_price = average_price
-        # self.num_rounds = num_rounds
 
 
 # REMEMBER, WE DO IT THIS WAY NOT BECAUSE IT IS EASY!
@@ -566,6 +559,9 @@ class Trader:
             while volume > 0:
                 worst_price = order_depth[0][0]
                 volume += order_depth[0][1]
+                order_depth[0][1] += 1
+                if order_depth[0][1] == 0:
+                    order_depth.pop(0)
         elif volume < 0:
             order_depth = [list(item) for item in state.order_depths[product].buy_orders.items()]
             if volume < - sum([order_depth[i][1] for i in range(len(order_depth))]):
@@ -574,6 +570,9 @@ class Trader:
             while volume < 0:
                 worst_price = order_depth[0][0]
                 volume += order_depth[0][1]
+                order_depth[0][1] -= 1
+                if order_depth[0][1] == 0:
+                    order_depth.pop(0)
         else:
             print("Requested price for volume 0")
             worst_price = 0
