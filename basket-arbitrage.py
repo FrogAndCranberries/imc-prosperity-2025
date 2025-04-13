@@ -139,12 +139,65 @@ class Trader:
                 else:
                     result[order.symbol] = [order]
 
+
+        for product in ["KELP", "RAINFOREST_RESIN"]:
+            if product not in state.order_depths.keys():
+                continue
+            order_depth: OrderDepth = state.order_depths[product]
+            orders: List[Order] = []
+            productPrices = traderData[product]
+
+                
+    
+            if len(order_depth.sell_orders) != 0 and len(order_depth.buy_orders) != 0:
+                best_bid, best_bid_amount = list(order_depth.buy_orders.items())[0]
+                best_ask, best_ask_amount = list(order_depth.sell_orders.items())[0]
+                
+            else:
+                continue
+            midprice = sum([best_ask,best_bid])/2.0
+
+            productPrices += [midprice]
+
+            if len(productPrices) > 200:
+                productPrices=productPrices[-200:]
+
+            avg_price = sum(productPrices)/len(productPrices)
+            factor = .6
+
+            top10 = avg_price + (max(productPrices[-100:]) - avg_price) * factor
+            bot10 = avg_price - (avg_price - min(productPrices[-100:]))*factor
+    
+            if len(order_depth.sell_orders) != 0:
+                best_ask, best_ask_amount = list(order_depth.sell_orders.items())[0]
+                for ask,amount in list(order_depth.sell_orders.items()):
+                    if ask < bot10:
+                        # print("BUY", str(-best_ask_amount) + "x", best_ask)
+                        orders.append(Order(product, ask, -amount))
+        
+            if len(order_depth.buy_orders) != 0:
+                best_bid, best_bid_amount = list(order_depth.buy_orders.items())[0]
+                for bid,amount in list(order_depth.buy_orders.items()):
+                    if bid > top10:
+                        # print("SELL", str(best_bid_amount) + "x", best_bid)
+                        orders.append(Order(product, bid, -amount))
+            if product in result.keys():
+                result[product] += orders
+            else:
+                result[product] = orders
+            traderData[product] = productPrices
+
+
         traderData = jsonpickle.encode(traderData) # String value holding Trader state data required. It will be delivered as TradingState.traderData on next execution.
         
         conversions = 1
         # for key, value in result.items():
         #     print(key)
         #     print(value)
+
+
+
+
         return result, conversions, traderData
 
 
