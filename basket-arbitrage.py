@@ -40,11 +40,11 @@ class Trader:
 
     OPENING_SPREAD_THRESHOLD = {
         "PICNIC_BASKET1": 100,
-        "PICNIC_BASKET2": 100}
+        "PICNIC_BASKET2": 50}
     
     CLOSING_SPREAD_THRESHOLD = {
-        "PICNIC_BASKET1": 10,
-        "PICNIC_BASKET2": 10}
+        "PICNIC_BASKET1": 5,
+        "PICNIC_BASKET2": 5}
     
     # ALLOW_HEDGING_BETWEEN_BASKETS = True
 
@@ -105,7 +105,7 @@ class Trader:
 
 
             # If we have no position, check if spread is +ve enough to sell or -ve enough to buy
-            if basket not in state.position.keys():
+            if basket not in state.position.keys() or state.position[basket] == 0:
                 if midprice_spread > self.OPENING_SPREAD_THRESHOLD[basket]:
                     # print(f"Midprice spread {midprice_spread} on {basket}, testing short")
                     orders = self.open_short_arbitrage(state, basket)
@@ -308,6 +308,7 @@ class Trader:
         assembled_ask_depth = [[ask, - assembled_prices_per_basket.count(ask)] for ask in sorted(set(assembled_prices_per_basket))]
         basket_bid_depth = [list(item) for item in state.order_depths[basket].buy_orders.items()]
 
+        top_assembled_ask = assembled_ask_depth[0][0]
         # Find max volume to trade within position closing spread
         max_order_volume = 0
 
@@ -331,6 +332,7 @@ class Trader:
             else:
                 break
 
+        print(max_order_volume, "   -   ", -position)
         order_volume = max(max_order_volume, - position)
 
 
@@ -338,7 +340,10 @@ class Trader:
 
         if order_volume != 0:
             # Order to sell baskets
-            orders.append(Order(basket, self.worst_price_for_volume(state, basket, order_volume), order_volume))
+            price = self.worst_price_for_volume(state, basket, order_volume)
+            print(f"Closing long on {basket}: {order_volume} at {price} or better against assembled basket at {top_assembled_ask}.")
+
+            orders.append(Order(basket, price, order_volume))
 
             # Orders to buy components
             for component in self.BASKET_CONTENTS[basket].keys():
@@ -372,6 +377,7 @@ class Trader:
         assembled_bid_depth = [[bid, assembled_prices_per_basket.count(bid)] for bid in sorted(set(assembled_prices_per_basket), reverse=True)]
         basket_ask_depth = [list(item) for item in state.order_depths[basket].sell_orders.items()]
 
+        top_assembled_bid = assembled_bid_depth[0][0]
 
         # Find max volume to trade with favorable spread
         max_order_volume = 0
@@ -395,14 +401,18 @@ class Trader:
                     assembled_bid_depth.pop(0)
             else:
                 break
-
+        
+        print(max_order_volume, "   -   ", -position)
         order_volume = min(max_order_volume, - position)
 
         orders: List[Order] = []
 
         if order_volume != 0:
             # Order to buy baskets
-            orders.append(Order(basket, self.worst_price_for_volume(state, basket, order_volume), order_volume))
+            price = self.worst_price_for_volume(state, basket, order_volume)
+            print(f"Closing short on {basket}: {order_volume} at {price} or better against assembled basket at {top_assembled_bid}.")
+
+            orders.append(Order(basket, price, order_volume))
 
             # Orders to sell components
             for component in self.BASKET_CONTENTS[basket].keys():
