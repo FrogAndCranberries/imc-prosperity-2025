@@ -147,6 +147,7 @@ class Trader:
         self.params = params
 
         self.LIMIT = {
+            Product.VOLCANIC_ROCK: 400, 
             Product.VOLCANIC_ROCK_VOUCHER_9500: 200,
             Product.VOLCANIC_ROCK_VOUCHER_9750: 200,
             Product.VOLCANIC_ROCK_VOUCHER_10000: 200,
@@ -380,7 +381,7 @@ class Trader:
             best_bid_vol + best_ask_vol
         )
 
-    def get_rock_vaucher_mid_price(
+    def get_rock_voucher_mid_price(
         self, rock_voucher_order_depth: OrderDepth, traderData: Dict[str, Any]
     ):
         if (
@@ -431,10 +432,10 @@ class Trader:
             best_bid = max(rock_order_depth.buy_orders.keys())
             quantity = min(
                 abs(target_rock_quantity),
-                self.LIMIT[Product.ROCK] + rock_position,
+                self.LIMIT[Product.VOLCANIC_ROCK] + rock_position,
             )
             if quantity > 0:
-                orders.append(Order(Product.ROCK, best_bid, -round(quantity)))
+                orders.append(Order(Product.VOLCANIC_ROCK, best_bid, -round(quantity)))
         
         return orders
 
@@ -452,6 +453,20 @@ class Trader:
         if len(traderData['past_coupon_vol']) > self.params[Product.VOLCANIC_ROCK_VOUCHER_10000]['std_window']:
             traderData['past_coupon_vol'].pop(0)
         
+        # Calculate standard deviation first
+        vol_std_dev = np.std(traderData['past_coupon_vol'])
+
+        # Check if standard deviation is effectively zero before dividing
+        if vol_std_dev < 1e-8:  # Use a small tolerance instead of == 0 for floating point safety
+            vol_z_score = 0.0 # If there's no std dev, the Z-score is 0 (no deviation)
+            # Alternatively, you could decide to skip trading this tick:
+            # return None, None
+        else:
+            # Calculate Z-score normally if std dev is not zero
+            vol_z_score = (volatility - self.params[Product.VOLCANIC_ROCK_VOUCHER_10000]['mean_volatility']) / vol_std_dev # Use calculated vol_std_dev
+
+        #  print(f"vol_z_score: {vol_z_score}") # Keep for debugging if needed
+
         vol_z_score = (volatility - self.params[Product.VOLCANIC_ROCK_VOUCHER_10000]['mean_volatility']) / np.std(traderData['past_coupon_vol'])
         # print(f"vol_z_score: {vol_z_score}")
         # print(f"zscore_threshold: {self.params[Product.ROCK_VOUCHER]['zscore_threshold']}")
@@ -568,13 +583,13 @@ class Trader:
             Product.VOLCANIC_ROCK_VOUCHER_10000 in self.params
             and Product.VOLCANIC_ROCK_VOUCHER_10000 in state.order_depths
         ):
-            coconut_coupon_position = (
+            rock_voucher_position = (
                 state.position[Product.VOLCANIC_ROCK_VOUCHER_10000]
                 if Product.VOLCANIC_ROCK_VOUCHER_10000 in state.position
                 else 0
             )
 
-            coconut_position = (
+            rock_position = (
                 state.position[Product.VOLCANIC_ROCK]
                 if Product.VOLCANIC_ROCK in state.position
                 else 0
@@ -614,7 +629,7 @@ class Trader:
                 volatility,
             )
 
-            coconut_orders = self.rock_hedge_orders(
+            rock_orders = self.rock_hedge_orders(
                 state.order_depths[Product.VOLCANIC_ROCK],
                 state.order_depths[Product.VOLCANIC_ROCK_VOUCHER_10000],
                 rock_voucher_take_orders,
