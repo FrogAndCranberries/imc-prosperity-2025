@@ -430,6 +430,7 @@ class Trader:
                 if len(state.order_depths[product].sell_orders) == 0 and len(state.order_depths[product].buy_orders) == 0:
                     skip_arbitrage = True
             if skip_arbitrage:
+                print("skipping arbitrage")
                 continue
 
             # Get midprice spread
