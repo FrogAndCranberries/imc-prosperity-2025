@@ -2,7 +2,62 @@ from datamodel import OrderDepth, UserId, TradingState, Order, Symbol
 from typing import List
 import jsonpickle
 
+PARAMS = {
+    
+    Product.VOLCANIC_ROCK: {
+    },
+    Product.SPREAD: {
+        "default_spread_mean": 379.50439988484239,
+        "default_spread_std": 76.07966,
+        "spread_std_window": 45,
+        "zscore_threshold": 7,
+        "target_position": 58,
+    },
+    Product.VOLCANIC_ROCK_VOUCHER_9500: {
+        "mean_volatility": 0.15959997370608378,
+        "threshold": 0.00163,
+        "strike": 9500,
+        "starting_time_to_expiry": 7,
+        "std_window": 6,
+        "zscore_threshold": 21,
+    },
+    Product.VOLCANIC_ROCK_VOUCHER_9750: {
+        "mean_volatility": 0.15959997370608378,
+        "threshold": 0.00163,
+        "strike": 9750,
+        "starting_time_to_expiry": 7,
+        "std_window": 6,
+        "zscore_threshold": 21,
+    },
+    Product.VOLCANIC_ROCK_VOUCHER_10000: {
+        "mean_volatility": 0.15959997370608378,
+        "threshold": 0.00163,
+        "strike": 10000,
+        "starting_time_to_expiry": 7,
+        "std_window": 6,
+        "zscore_threshold": 21,
+    },
+    Product.VOLCANIC_ROCK_VOUCHER_10250: {
+        "mean_volatility": 0.15959997370608378,
+        "threshold": 0.00163,
+        "strike": 10250,
+        "starting_time_to_expiry": 7,
+        "std_window": 6,
+        "zscore_threshold": 21,
+    },
+    Product.VOLCANIC_ROCK_VOUCHER_10500: {
+        "mean_volatility": 0.15959997370608378,
+        "threshold": 0.00163,
+        "strike": 10500,
+        "starting_time_to_expiry": 7,
+        "std_window": 6,
+        "zscore_threshold": 21,
+    },
 
+}
+
+from math import log, sqrt, exp
+from statistics import NormalDist
 # REMEMBER, WE DO IT THIS WAY NOT BECAUSE IT IS EASY!
 # But because we thought it would be.
 
@@ -89,7 +144,7 @@ class Trader:
             Product.VOLCANIC_ROCK_VOUCHER_10500: 200,
         }
         # Returns buy_order_volume, sell_order_volume
-    def take_best_orders(
+        def take_best_orders(
         self,
         product: str,
         fair_value: int,
@@ -132,7 +187,7 @@ class Trader:
                     if order_depth.buy_orders[best_bid] == 0:
                         del order_depth.buy_orders[best_bid]
         return buy_order_volume, sell_order_volume
-    def take_best_orders_with_adverse(
+        def take_best_orders_with_adverse(
         self,
         product: str,
         fair_value: int,
@@ -178,7 +233,7 @@ class Trader:
 
         return buy_order_volume, sell_order_volume
 
-    def market_make(
+         def market_make(
         self,
         product: str,
         orders: List[Order],
@@ -197,7 +252,7 @@ class Trader:
             orders.append(Order(product, round(ask), -sell_quantity))  # Sell order
         return buy_order_volume, sell_order_volume
 
-    def clear_position_order(
+        def clear_position_order(
         self,
         product: str,
         fair_value: float,
@@ -244,7 +299,7 @@ class Trader:
         return buy_order_volume, sell_order_volume
     
 
-    def take_orders(
+        def take_orders(
         self,
         product: str,
         order_depth: OrderDepth,
@@ -283,7 +338,7 @@ class Trader:
             )
         return orders, buy_order_volume, sell_order_volume
 
-    def clear_orders(
+        def clear_orders(
         self,
         product: str,
         order_depth: OrderDepth,
@@ -306,7 +361,7 @@ class Trader:
         )
         return orders, buy_order_volume, sell_order_volume
 
-    def get_swmid(self, order_depth) -> float:
+        def get_swmid(self, order_depth) -> float:
         best_bid = max(order_depth.buy_orders.keys())
         best_ask = min(order_depth.sell_orders.keys())
         best_bid_vol = abs(order_depth.buy_orders[best_bid])
@@ -315,7 +370,7 @@ class Trader:
             best_bid_vol + best_ask_vol
         )
 
-    def get_voucher_mid_price(
+        def get_voucher_mid_price(
         self,
         product: str,
         order_depth: OrderDepth,
@@ -670,6 +725,7 @@ class Trader:
         "PICNIC_BASKET1": 5,
         "PICNIC_BASKET2": 5}
     
+
     # ALLOW_HEDGING_BETWEEN_BASKETS = True
 
 
