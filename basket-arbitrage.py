@@ -4,7 +4,6 @@ import jsonpickle
 from math import log, sqrt, exp
 from statistics import NormalDist
 
-
 class Product:
     VOLCANIC_ROCK = "VOLCANIC_ROCK"
     VOLCANIC_ROCK_VOUCHER_9500 = "VOLCANIC_ROCK_VOUCHER_9500"
@@ -68,38 +67,6 @@ PARAMS = {
 
 }
 
-    # Component volume must be more than 0 
-    BASKET_CONTENTS = {
-        "PICNIC_BASKET1": {
-            "CROISSANTS": 6,
-            "JAMS": 3,
-            "DJEMBES": 1},
-
-        "PICNIC_BASKET2": {
-            "CROISSANTS": 4,
-            "JAMS": 2}}
-    LIMITS = {
-        "RAINFOREST_RESIN": 50, 
-        "SQUID_INK": 50,
-        "KELP": 50,
-        "JAMS": 350, 
-        "CROISSANTS": 250, 
-        "DJEMBES": 60,
-        "PICNIC_BASKET1": 60,
-        "PICNIC_BASKET2": 100}
-    
-    BASKETS = ["PICNIC_BASKET1", "PICNIC_BASKET2"]
-
-    OPENING_SPREAD_THRESHOLD = {
-        "PICNIC_BASKET1": 100,
-        "PICNIC_BASKET2": 50}
-    
-    CLOSING_SPREAD_THRESHOLD = {
-        "PICNIC_BASKET1": 5,
-        "PICNIC_BASKET2": 5}
-    
-
-    # ALLOW_HEDGING_BETWEEN_BASKETS = True
 
 # REMEMBER, WE DO IT THIS WAY NOT BECAUSE IT IS EASY!
 # But because we thought it would be.
@@ -173,7 +140,7 @@ class BlackScholes:
 
 class Trader:
     
-        def __init__(self, params=None):
+    def __init__(self, params=None):
             if params is None:
                 params = PARAMS
             self.params = params
@@ -187,7 +154,7 @@ class Trader:
                 Product.VOLCANIC_ROCK_VOUCHER_10500: 200,
             }
         # Returns buy_order_volume, sell_order_volume
-        def take_best_orders(
+    def take_best_orders(
         self,
         product: str,
         fair_value: int,
@@ -230,7 +197,7 @@ class Trader:
                         if order_depth.buy_orders[best_bid] == 0:
                             del order_depth.buy_orders[best_bid]
             return buy_order_volume, sell_order_volume
-        def take_best_orders_with_adverse(
+    def take_best_orders_with_adverse(
         self,
         product: str,
         fair_value: int,
@@ -276,7 +243,7 @@ class Trader:
 
             return buy_order_volume, sell_order_volume
 
-        def market_make(
+    def market_make(
         self,
         product: str,
         orders: List[Order],
@@ -295,7 +262,7 @@ class Trader:
                 orders.append(Order(product, round(ask), -sell_quantity))  # Sell order
             return buy_order_volume, sell_order_volume
 
-        def clear_position_order(
+    def clear_position_order(
         self,
         product: str,
         fair_value: float,
@@ -340,9 +307,8 @@ class Trader:
                     buy_order_volume += abs(sent_quantity)
 
             return buy_order_volume, sell_order_volume
-        
 
-        def take_orders(
+    def take_orders(
         self,
         product: str,
         order_depth: OrderDepth,
@@ -381,7 +347,7 @@ class Trader:
             )
         return orders, buy_order_volume, sell_order_volume
 
-        def clear_orders(
+    def clear_orders(
         self,
         product: str,
         order_depth: OrderDepth,
@@ -404,7 +370,7 @@ class Trader:
             )
             return orders, buy_order_volume, sell_order_volume
 
-        def get_swmid(self, order_depth) -> float:
+    def get_swmid(self, order_depth) -> float:
         best_bid = max(order_depth.buy_orders.keys())
         best_ask = min(order_depth.sell_orders.keys())
         best_bid_vol = abs(order_depth.buy_orders[best_bid])
@@ -413,7 +379,7 @@ class Trader:
             best_bid_vol + best_ask_vol
         )
 
-        def get_voucher_mid_price(
+    def get_voucher_mid_price(
         self,
         product: str,
         order_depth: OrderDepth,
@@ -440,7 +406,7 @@ class Trader:
                 return None
 
 
-        def generate_hedge_orders( # Keep this as before
+    def generate_hedge_orders( # Keep this as before
         self,
         rock_trade_qty: float,
         rock_position: int,
@@ -735,9 +701,221 @@ class Trader:
                 else:
                     returns_dict[symbol] = None
 
-            return returns_dict
+            return returns_dic
 
 
+    def clear_orders(
+        self,
+        product: str,
+        order_depth: OrderDepth,
+        fair_value: float,
+        clear_width: int,
+        position: int,
+        buy_order_volume: int,
+        sell_order_volume: int,
+    ) -> (List[Order], int, int):
+        orders: List[Order] = []
+        buy_order_volume, sell_order_volume = self.clear_position_order(
+            product,
+            fair_value,
+            clear_width,
+            orders,
+            order_depth,
+            position,
+            buy_order_volume,
+            sell_order_volume,
+        )
+        return orders, buy_order_volume, sell_order_volume
+
+    def get_swmid(self, order_depth) -> float:
+        best_bid = max(order_depth.buy_orders.keys())
+        best_ask = min(order_depth.sell_orders.keys())
+        best_bid_vol = abs(order_depth.buy_orders[best_bid])
+        best_ask_vol = abs(order_depth.sell_orders[best_ask])
+        return (best_bid * best_ask_vol + best_ask * best_bid_vol) / (
+            best_bid_vol + best_ask_vol
+        )
+
+    def get_voucher_mid_price(
+        self,
+        product: str,
+        order_depth: OrderDepth,
+        traderData: Dict[str, Any] # Takes the dictionary as argument
+    ) -> float | None:
+        product_state = traderData.get(product, {})
+        prev_price = product_state.get('prev_voucher_price', None)
+
+        if len(order_depth.buy_orders) > 0 and len(order_depth.sell_orders) > 0:
+            best_bid = max(order_depth.buy_orders.keys())
+            best_ask = min(order_depth.sell_orders.keys())
+            mid_price = (best_bid + best_ask) / 2
+
+            # Update the passed dictionary
+            # Ensure product key exists before assigning sub-key (robustness)
+            if product not in traderData:
+                 traderData[product] = {}
+            traderData[product]['prev_voucher_price'] = mid_price
+
+            return mid_price
+        elif prev_price is not None:
+            return prev_price
+        else:
+            return None
+
+
+    def generate_hedge_orders( # Keep this as before
+        self,
+        rock_trade_qty: float,
+        rock_position: int,
+        rock_order_depth: OrderDepth
+    ) -> List[Order]:
+        # ... (implementation as before) ...
+        orders: List[Order] = []
+        if rock_order_depth is None: return orders
+        rock_limit = self.LIMIT[Product.VOLCANIC_ROCK]
+        rock_trade_qty_int = int(round(rock_trade_qty))
+        if rock_trade_qty_int > 0:
+            max_buy_vol = rock_limit - rock_position
+            if max_buy_vol <= 0: return orders
+            quantity_to_buy = min(rock_trade_qty_int, max_buy_vol)
+            if quantity_to_buy > 0 and len(rock_order_depth.sell_orders) > 0:
+                best_ask = min(rock_order_depth.sell_orders.keys())
+                orders.append(Order(Product.VOLCANIC_ROCK, best_ask, quantity_to_buy))
+        elif rock_trade_qty_int < 0:
+            max_sell_vol = rock_limit + rock_position
+            if max_sell_vol <= 0: return orders
+            quantity_to_sell = min(abs(rock_trade_qty_int), max_sell_vol)
+            if quantity_to_sell > 0 and len(rock_order_depth.buy_orders) > 0:
+                best_bid = max(rock_order_depth.buy_orders.keys())
+                orders.append(Order(Product.VOLCANIC_ROCK, best_bid, -quantity_to_sell))
+        return orders
+    # --- End Helper Functions ---
+
+
+    # Renamed from rock_voucher_orders
+    def get_voucher_orders(
+        self,
+        product: str, # Added parameter
+        order_depth: OrderDepth,
+        position: int,
+        traderData: Dict[str, Any],
+        volatility: float,
+    ) -> (List[Order], List[Order]): # Return take_orders, make_orders
+        
+        # Access product-specific params and state
+        params = self.params[product]
+        limit = self.LIMIT[product]
+        product_state = traderData.get(product, {}) # Get state for this product
+        past_vol = product_state.get('past_coupon_vol', []) # Get past vol for this product
+
+        past_vol.append(volatility)
+        if len(past_vol) > params['std_window']:
+            past_vol.pop(0)
+        
+        # Update state in traderData
+        traderData[product]['past_coupon_vol'] = past_vol 
+
+        if len(past_vol) < params['std_window']:
+            return None, None # Not enough data yet
+
+        vol_std_dev = np.std(past_vol)
+
+        if vol_std_dev < 1e-8:
+            vol_z_score = 0.0
+        else:
+            # Use product-specific mean volatility
+            vol_z_score = (volatility - params['mean_volatility']) / vol_std_dev 
+
+        take_orders = []
+        make_orders = []
+        
+        # Use product-specific zscore threshold
+        if vol_z_score >= params['zscore_threshold']:
+            target_position = -limit
+            if position > target_position: # Need to sell more
+                if len(order_depth.buy_orders) > 0:
+                    best_bid = max(order_depth.buy_orders.keys())
+                    needed_quantity = abs(target_position - position) # How many to sell
+                    available_quantity = order_depth.buy_orders[best_bid]
+                    
+                    take_quantity = min(needed_quantity, available_quantity)
+                    if take_quantity > 0:
+                        take_orders.append(Order(product, best_bid, -take_quantity))
+                        
+                    quote_quantity = needed_quantity - take_quantity
+                    if quote_quantity > 0:
+                         # Quote remaining at the same price for simplicity
+                         make_orders.append(Order(product, best_bid, -quote_quantity))
+
+        elif vol_z_score <= -params['zscore_threshold']:
+            target_position = limit
+            if position < target_position: # Need to buy more
+                if len(order_depth.sell_orders) > 0:
+                    best_ask = min(order_depth.sell_orders.keys())
+                    needed_quantity = abs(target_position - position) # How many to buy
+                    available_quantity = abs(order_depth.sell_orders[best_ask])
+
+                    take_quantity = min(needed_quantity, available_quantity)
+                    if take_quantity > 0:
+                        take_orders.append(Order(product, best_ask, take_quantity))
+                        
+                    quote_quantity = needed_quantity - take_quantity
+                    if quote_quantity > 0:
+                        # Quote remaining at the same price for simplicity
+                        make_orders.append(Order(product, best_ask, quote_quantity))
+
+        return take_orders, make_orders
+    
+    def get_past_returns(
+        self,
+        traderObject: Dict[str, Any],
+        order_depths: Dict[str, OrderDepth],
+        timeframes: Dict[str, int],
+    ):
+        returns_dict = {}
+
+        for symbol, timeframe in timeframes.items():
+            traderObject_key = f"{symbol}_price_history"
+            if traderObject_key not in traderObject:
+                traderObject[traderObject_key] = []
+
+            price_history = traderObject[traderObject_key]
+
+            if symbol in order_depths:
+                order_depth = order_depths[symbol]
+                if len(order_depth.buy_orders) > 0 and len(order_depth.sell_orders) > 0:
+                    current_price = (
+                        max(order_depth.buy_orders.keys())
+                        + min(order_depth.sell_orders.keys())
+                    ) / 2
+                else:
+                    if len(price_history) > 0:
+                        current_price = float(price_history[-1])
+                    else:
+                        returns_dict[symbol] = None
+                        continue
+            else:
+                if len(price_history) > 0:
+                    current_price = float(price_history[-1])
+                else:
+                    returns_dict[symbol] = None
+                    continue
+
+            price_history.append(
+                f"{current_price:.1f}"
+            )  # Convert float to string with 1 decimal place
+
+            if len(price_history) > timeframe:
+                price_history.pop(0)
+
+            if len(price_history) == timeframe:
+                past_price = float(price_history[0])  # Convert string back to float
+                returns = (current_price - past_price) / past_price
+                returns_dict[symbol] = returns
+            else:
+                returns_dict[symbol] = None
+
+        return returns_dict
 
 
     def run(self, state: TradingState):
@@ -904,397 +1082,394 @@ class Trader:
         #     print(key)
         #     print(value)
 
-
-
-
         return result, conversions, traderData
 
 
 
-        # Buying baskets and selling components
-        def open_long_arbitrage(self, state: TradingState, basket: Symbol):
 
-            # Make a list of how expensive each component will be for each subsequent basket (prices get worse as we progress through the order book)
-            # E.g. how much will first 6 croissants cost, then next 6, etc as far as market allows
 
-            component_bids_per_basket = self.component_bids_per_basket(state, basket)
 
-            # Get max number of baskets from shortest supply component
-            max_baskets = min([len(bids) for bids in component_bids_per_basket.values()])
+    # Buying baskets and selling components
+    def open_long_arbitrage(self, state: TradingState, basket: Symbol):
 
-            # Get total prices for each assembled basket equivalent
-            assembled_prices_per_basket = []
+        # Make a list of how expensive each component will be for each subsequent basket (prices get worse as we progress through the order book)
+        # E.g. how much will first 6 croissants cost, then next 6, etc as far as market allows
 
-            for i in range(max_baskets):
-                assembled_prices_per_basket.append(sum([bids[i] for bids in component_bids_per_basket.values()]))
+        component_bids_per_basket = self.component_bids_per_basket(state, basket)
 
-            # Collate into order_depth list format
-            assembled_bid_depth = [[bid, assembled_prices_per_basket.count(bid)] for bid in sorted(set(assembled_prices_per_basket), reverse=True)]
-            basket_ask_depth = [list(item) for item in state.order_depths[basket].sell_orders.items()]
+        # Get max number of baskets from shortest supply component
+        max_baskets = min([len(bids) for bids in component_bids_per_basket.values()])
 
-            top_assembled_bid = assembled_bid_depth[0][0]
+        # Get total prices for each assembled basket equivalent
+        assembled_prices_per_basket = []
 
-            # print("Long arbitrage:")
-            # print("Basket ask depth: ", basket_ask_depth)
-            # print("Assembled bid depth: ", assembled_bid_depth)
+        for i in range(max_baskets):
+            assembled_prices_per_basket.append(sum([bids[i] for bids in component_bids_per_basket.values()]))
 
-            # Find max volume to trade with favorable spread
-            max_order_volume = 0
+        # Collate into order_depth list format
+        assembled_bid_depth = [[bid, assembled_prices_per_basket.count(bid)] for bid in sorted(set(assembled_prices_per_basket), reverse=True)]
+        basket_ask_depth = [list(item) for item in state.order_depths[basket].sell_orders.items()]
 
-            while len(assembled_bid_depth) > 0 and len(basket_ask_depth) > 0:
+        top_assembled_bid = assembled_bid_depth[0][0]
 
-                best_assembled_bid, best_assembled_bid_amount = assembled_bid_depth[0] # Hopefully high
-                best_basket_ask, best_basket_ask_amount = basket_ask_depth[0] # Hopefully low
+        # print("Long arbitrage:")
+        # print("Basket ask depth: ", basket_ask_depth)
+        # print("Assembled bid depth: ", assembled_bid_depth)
 
-                best_spread = best_basket_ask - best_assembled_bid # Hopefully very negative
-                if best_spread < - self.OPENING_SPREAD_THRESHOLD[basket]:
-                    max_order_volume += min(abs(best_assembled_bid_amount), abs(best_basket_ask_amount))
-                    if abs(best_assembled_bid_amount) < abs(best_basket_ask_amount):
-                        basket_ask_depth[0][1] += best_assembled_bid_amount # Plus here since one value is always +ve, other -ve
-                        assembled_bid_depth.pop(0)
-                    elif abs(best_assembled_bid_amount) > abs(best_basket_ask_amount):
-                        assembled_bid_depth[0][1] += best_basket_ask_amount # Plus here since one value is always +ve, other -ve
-                        basket_ask_depth.pop(0)
-                    else:
-                        basket_ask_depth.pop(0)
-                        assembled_bid_depth.pop(0)
+        # Find max volume to trade with favorable spread
+        max_order_volume = 0
+
+        while len(assembled_bid_depth) > 0 and len(basket_ask_depth) > 0:
+
+            best_assembled_bid, best_assembled_bid_amount = assembled_bid_depth[0] # Hopefully high
+            best_basket_ask, best_basket_ask_amount = basket_ask_depth[0] # Hopefully low
+
+            best_spread = best_basket_ask - best_assembled_bid # Hopefully very negative
+            if best_spread < - self.OPENING_SPREAD_THRESHOLD[basket]:
+                max_order_volume += min(abs(best_assembled_bid_amount), abs(best_basket_ask_amount))
+                if abs(best_assembled_bid_amount) < abs(best_basket_ask_amount):
+                    basket_ask_depth[0][1] += best_assembled_bid_amount # Plus here since one value is always +ve, other -ve
+                    assembled_bid_depth.pop(0)
+                elif abs(best_assembled_bid_amount) > abs(best_basket_ask_amount):
+                    assembled_bid_depth[0][1] += best_basket_ask_amount # Plus here since one value is always +ve, other -ve
+                    basket_ask_depth.pop(0)
                 else:
-                    break
+                    basket_ask_depth.pop(0)
+                    assembled_bid_depth.pop(0)
+            else:
+                break
 
-            order_volume = min(max_order_volume, self.arbitrage_volume_limit(state, basket)[0])
+        order_volume = min(max_order_volume, self.arbitrage_volume_limit(state, basket)[0])
 
 
+        # Order to buy baskets
+        orders: List[Order] = []
+        if order_volume != 0:
+            price = self.worst_price_for_volume(state, basket, order_volume)
+            print(f"Opening long on {basket}: {order_volume} at {price} or better against assembled basket at {top_assembled_bid}.")
+            orders.append(Order(basket, price, order_volume))
+
+            # Orders to sell components
+            for component in self.BASKET_CONTENTS[basket].keys():
+                component_volume = - order_volume * self.BASKET_CONTENTS[basket][component]
+                orders.append(Order(component, self.worst_price_for_volume(state, component, component_volume), component_volume))
+
+        return orders
+
+    # Selling baskets and buying components
+    def open_short_arbitrage(self, state: TradingState, basket: Symbol):
+
+        # Make a list of how expensive each component will be for each subsequent basket (prices get worse as we progress through the order book)
+        # E.g. how much will first 6 croissants cost, then next 6, etc as far as market allows
+        component_asks_per_basket = self.component_asks_per_basket(state, basket)
+
+        # Get max number of baskets from shortest supply component
+        max_baskets = min([len(asks) for asks in component_asks_per_basket.values()])
+
+        # Get total prices for each assembled basket equivalent
+        assembled_prices_per_basket = []
+
+        for i in range(max_baskets):
+            assembled_prices_per_basket.append(sum([asks[i] for asks in component_asks_per_basket.values()]))
+
+        # Collate into order_depth list format
+        assembled_ask_depth = [[ask, - assembled_prices_per_basket.count(ask)] for ask in sorted(set(assembled_prices_per_basket))]
+        basket_bid_depth = [list(item) for item in state.order_depths[basket].buy_orders.items()]
+
+        # print("Short arbitrage:")
+        # print("Basket bid depth: ", basket_bid_depth)
+        # print("Items: ", component_asks_per_basket)
+        # print("max baskets: ", max_baskets)
+        # print("Assembled individual prices: ", assembled_prices_per_basket)
+        # print("Assembled price depth: ", assembled_ask_depth)
+        top_assembled_ask = assembled_ask_depth[0][0]
+
+        # Find max volume to trade with favorable spread
+        max_order_volume = 0
+
+        while len(assembled_ask_depth) > 0 and len(basket_bid_depth) > 0:
+
+            best_assembled_ask, best_assembled_ask_amount = assembled_ask_depth[0] # Hopefully low
+            best_basket_bid, best_basket_bid_amount = basket_bid_depth[0] # Hopefully high
+
+            best_spread = best_basket_bid - best_assembled_ask # Hopefully very positive
+            if best_spread > self.OPENING_SPREAD_THRESHOLD[basket]:
+                max_order_volume -= min(abs(best_assembled_ask_amount), abs(best_basket_bid_amount))
+                if abs(best_assembled_ask_amount) < abs(best_basket_bid_amount):
+                    basket_bid_depth[0][1] += best_assembled_ask_amount # Plus here since one value is always +ve, other -ve
+                    assembled_ask_depth.pop(0)
+                elif abs(best_assembled_ask_amount) > abs(best_basket_bid_amount):
+                    assembled_ask_depth[0][1] += best_basket_bid_amount # Plus here since one value is always +ve, other -ve
+                    basket_bid_depth.pop(0)
+                else:
+                    basket_bid_depth.pop(0)
+                    assembled_ask_depth.pop(0)
+            else:
+                break
+
+        # Both max_order_volume and arbitrage_volume_limits()[1] are negative -> get the smaller magnitude with max
+        order_volume = max(max_order_volume, self.arbitrage_volume_limit(state, basket)[1])
+
+
+        orders: List[Order] = []
+        if order_volume != 0:
+            # Order to sell baskets - volume is negative
+            price = self.worst_price_for_volume(state, basket, order_volume)
+            print(f"Opening short on {basket}: {order_volume} at {price} or better against assembled basket at {top_assembled_ask}.")
+            orders.append(Order(basket, price, order_volume))
+
+            # Orders to buy components
+            for component in self.BASKET_CONTENTS[basket].keys():
+                component_volume = - order_volume * self.BASKET_CONTENTS[basket][component]
+                orders.append(Order(component, self.worst_price_for_volume(state, component, component_volume), component_volume))
+
+        return orders
+
+    def close_long_arbitrage(self, state: TradingState, basket: Symbol):
+        orders: List[Order] = []
+        position = state.position[basket]
+
+        # print(f"Closing position {position} of {basket}")
+
+        # Make a list of how expensive each component will be for each subsequent basket (prices get worse as we progress through the order book)
+        # E.g. how much will first 6 croissants cost, then next 6, etc as far as market allows
+        component_asks_per_basket = self.component_asks_per_basket(state, basket)
+
+        # Get max number of baskets from shortest supply component
+        max_baskets = min([len(asks) for asks in component_asks_per_basket.values()])
+
+        # Get total prices for each assembled basket equivalent
+        assembled_prices_per_basket = []
+
+        for i in range(max_baskets):
+            assembled_prices_per_basket.append(sum([asks[i] for asks in component_asks_per_basket.values()]))
+
+        # Collate into order_depth list format
+        assembled_ask_depth = [[ask, - assembled_prices_per_basket.count(ask)] for ask in sorted(set(assembled_prices_per_basket))]
+        basket_bid_depth = [list(item) for item in state.order_depths[basket].buy_orders.items()]
+
+        top_assembled_ask = assembled_ask_depth[0][0]
+        # Find max volume to trade within position closing spread
+        max_order_volume = 0
+
+        while len(assembled_ask_depth) > 0 and len(basket_bid_depth) > 0:
+
+            best_assembled_ask, best_assembled_ask_amount = assembled_ask_depth[0] # Hopefully low
+            best_basket_bid, best_basket_bid_amount = basket_bid_depth[0] # Hopefully high
+
+            best_spread = best_basket_bid - best_assembled_ask # Hopefully very positive
+            if best_spread > - self.CLOSING_SPREAD_THRESHOLD[basket]:
+                max_order_volume -= min(abs(best_assembled_ask_amount), abs(best_basket_bid_amount))
+                if abs(best_assembled_ask_amount) < abs(best_basket_bid_amount):
+                    basket_bid_depth[0][1] += best_assembled_ask_amount # Plus here since one value is always +ve, other -ve
+                    assembled_ask_depth.pop(0)
+                elif abs(best_assembled_ask_amount) > abs(best_basket_bid_amount):
+                    assembled_ask_depth[0][1] += best_basket_bid_amount # Plus here since one value is always +ve, other -ve
+                    basket_bid_depth.pop(0)
+                else:
+                    basket_bid_depth.pop(0)
+                    assembled_ask_depth.pop(0)
+            else:
+                break
+
+        print(max_order_volume, "   -   ", -position)
+        order_volume = max(max_order_volume, - position)
+
+
+        orders: List[Order] = []
+
+        if order_volume != 0:
+            # Order to sell baskets
+            price = self.worst_price_for_volume(state, basket, order_volume)
+            print(f"Closing long on {basket}: {order_volume} at {price} or better against assembled basket at {top_assembled_ask}.")
+
+            orders.append(Order(basket, price, order_volume))
+
+            # Orders to buy components
+            for component in self.BASKET_CONTENTS[basket].keys():
+                component_volume = - order_volume * self.BASKET_CONTENTS[basket][component]
+                orders.append(Order(component, self.worst_price_for_volume(state, component, component_volume), component_volume))
+
+        return orders
+
+    # Buy back baskets and sell components to close short arbitrage position
+    def close_short_arbitrage(self, state: TradingState, basket: Symbol):
+        orders: List[Order] = []
+        position = state.position[basket]
+
+        # print(f"Closing position {position} of {basket}")
+
+        # Make a list of how expensive each component will be for each subsequent basket (prices get worse as we progress through the order book)
+        # E.g. how much will first 6 croissants cost, then next 6, etc as far as market allows
+
+        component_bids_per_basket = self.component_bids_per_basket(state, basket)
+
+        # Get max number of baskets from shortest supply component
+        max_baskets = min([len(bids) for bids in component_bids_per_basket.values()])
+
+        # Get total prices for each assembled basket equivalent
+        assembled_prices_per_basket = []
+
+        for i in range(max_baskets):
+            assembled_prices_per_basket.append(sum([bids[i] for bids in component_bids_per_basket.values()]))
+
+        # Collate into order_depth list format
+        assembled_bid_depth = [[bid, assembled_prices_per_basket.count(bid)] for bid in sorted(set(assembled_prices_per_basket), reverse=True)]
+        basket_ask_depth = [list(item) for item in state.order_depths[basket].sell_orders.items()]
+
+        top_assembled_bid = assembled_bid_depth[0][0]
+
+        # Find max volume to trade with favorable spread
+        max_order_volume = 0
+
+        while len(assembled_bid_depth) > 0 and len(basket_ask_depth) > 0:
+
+            best_assembled_bid, best_assembled_bid_amount = assembled_bid_depth[0] # Hopefully high
+            best_basket_ask, best_basket_ask_amount = basket_ask_depth[0] # Hopefully low
+
+            best_spread = best_basket_ask - best_assembled_bid # Hopefully very negative
+            if best_spread < self.CLOSING_SPREAD_THRESHOLD[basket]:
+                max_order_volume += min(abs(best_assembled_bid_amount), abs(best_basket_ask_amount))
+                if abs(best_assembled_bid_amount) < abs(best_basket_ask_amount):
+                    basket_ask_depth[0][1] += best_assembled_bid_amount # Plus here since one value is always +ve, other -ve
+                    assembled_bid_depth.pop(0)
+                elif abs(best_assembled_bid_amount) > abs(best_basket_ask_amount):
+                    assembled_bid_depth[0][1] += best_basket_ask_amount # Plus here since one value is always +ve, other -ve
+                    basket_ask_depth.pop(0)
+                else:
+                    basket_ask_depth.pop(0)
+                    assembled_bid_depth.pop(0)
+            else:
+                break
+        
+        print(max_order_volume, "   -   ", -position)
+        order_volume = min(max_order_volume, - position)
+
+        orders: List[Order] = []
+
+        if order_volume != 0:
             # Order to buy baskets
-            orders: List[Order] = []
-            if order_volume != 0:
-                price = self.worst_price_for_volume(state, basket, order_volume)
-                print(f"Opening long on {basket}: {order_volume} at {price} or better against assembled basket at {top_assembled_bid}.")
-                orders.append(Order(basket, price, order_volume))
+            price = self.worst_price_for_volume(state, basket, order_volume)
+            print(f"Closing short on {basket}: {order_volume} at {price} or better against assembled basket at {top_assembled_bid}.")
 
-                # Orders to sell components
-                for component in self.BASKET_CONTENTS[basket].keys():
-                    component_volume = - order_volume * self.BASKET_CONTENTS[basket][component]
-                    orders.append(Order(component, self.worst_price_for_volume(state, component, component_volume), component_volume))
+            orders.append(Order(basket, price, order_volume))
 
-            return orders
+            # Orders to sell components
+            for component in self.BASKET_CONTENTS[basket].keys():
+                component_volume = - order_volume * self.BASKET_CONTENTS[basket][component]
+                orders.append(Order(component, self.worst_price_for_volume(state, component, component_volume), component_volume))
 
-        # Selling baskets and buying components
-        def open_short_arbitrage(self, state: TradingState, basket: Symbol):
-
-            # Make a list of how expensive each component will be for each subsequent basket (prices get worse as we progress through the order book)
-            # E.g. how much will first 6 croissants cost, then next 6, etc as far as market allows
-            component_asks_per_basket = self.component_asks_per_basket(state, basket)
-
-            # Get max number of baskets from shortest supply component
-            max_baskets = min([len(asks) for asks in component_asks_per_basket.values()])
-
-            # Get total prices for each assembled basket equivalent
-            assembled_prices_per_basket = []
-
-            for i in range(max_baskets):
-                assembled_prices_per_basket.append(sum([asks[i] for asks in component_asks_per_basket.values()]))
-
-            # Collate into order_depth list format
-            assembled_ask_depth = [[ask, - assembled_prices_per_basket.count(ask)] for ask in sorted(set(assembled_prices_per_basket))]
-            basket_bid_depth = [list(item) for item in state.order_depths[basket].buy_orders.items()]
-
-            # print("Short arbitrage:")
-            # print("Basket bid depth: ", basket_bid_depth)
-            # print("Items: ", component_asks_per_basket)
-            # print("max baskets: ", max_baskets)
-            # print("Assembled individual prices: ", assembled_prices_per_basket)
-            # print("Assembled price depth: ", assembled_ask_depth)
-            top_assembled_ask = assembled_ask_depth[0][0]
-
-            # Find max volume to trade with favorable spread
-            max_order_volume = 0
-
-            while len(assembled_ask_depth) > 0 and len(basket_bid_depth) > 0:
-
-                best_assembled_ask, best_assembled_ask_amount = assembled_ask_depth[0] # Hopefully low
-                best_basket_bid, best_basket_bid_amount = basket_bid_depth[0] # Hopefully high
-
-                best_spread = best_basket_bid - best_assembled_ask # Hopefully very positive
-                if best_spread > self.OPENING_SPREAD_THRESHOLD[basket]:
-                    max_order_volume -= min(abs(best_assembled_ask_amount), abs(best_basket_bid_amount))
-                    if abs(best_assembled_ask_amount) < abs(best_basket_bid_amount):
-                        basket_bid_depth[0][1] += best_assembled_ask_amount # Plus here since one value is always +ve, other -ve
-                        assembled_ask_depth.pop(0)
-                    elif abs(best_assembled_ask_amount) > abs(best_basket_bid_amount):
-                        assembled_ask_depth[0][1] += best_basket_bid_amount # Plus here since one value is always +ve, other -ve
-                        basket_bid_depth.pop(0)
-                    else:
-                        basket_bid_depth.pop(0)
-                        assembled_ask_depth.pop(0)
-                else:
-                    break
-
-            # Both max_order_volume and arbitrage_volume_limits()[1] are negative -> get the smaller magnitude with max
-            order_volume = max(max_order_volume, self.arbitrage_volume_limit(state, basket)[1])
-
-
-            orders: List[Order] = []
-            if order_volume != 0:
-                # Order to sell baskets - volume is negative
-                price = self.worst_price_for_volume(state, basket, order_volume)
-                print(f"Opening short on {basket}: {order_volume} at {price} or better against assembled basket at {top_assembled_ask}.")
-                orders.append(Order(basket, price, order_volume))
-
-                # Orders to buy components
-                for component in self.BASKET_CONTENTS[basket].keys():
-                    component_volume = - order_volume * self.BASKET_CONTENTS[basket][component]
-                    orders.append(Order(component, self.worst_price_for_volume(state, component, component_volume), component_volume))
-
-            return orders
+        return orders
         
-        def close_long_arbitrage(self, state: TradingState, basket: Symbol):
-            orders: List[Order] = []
-            position = state.position[basket]
-
-            # print(f"Closing position {position} of {basket}")
-
-            # Make a list of how expensive each component will be for each subsequent basket (prices get worse as we progress through the order book)
-            # E.g. how much will first 6 croissants cost, then next 6, etc as far as market allows
-            component_asks_per_basket = self.component_asks_per_basket(state, basket)
-
-            # Get max number of baskets from shortest supply component
-            max_baskets = min([len(asks) for asks in component_asks_per_basket.values()])
-
-            # Get total prices for each assembled basket equivalent
-            assembled_prices_per_basket = []
-
-            for i in range(max_baskets):
-                assembled_prices_per_basket.append(sum([asks[i] for asks in component_asks_per_basket.values()]))
-
-            # Collate into order_depth list format
-            assembled_ask_depth = [[ask, - assembled_prices_per_basket.count(ask)] for ask in sorted(set(assembled_prices_per_basket))]
-            basket_bid_depth = [list(item) for item in state.order_depths[basket].buy_orders.items()]
-
-            top_assembled_ask = assembled_ask_depth[0][0]
-            # Find max volume to trade within position closing spread
-            max_order_volume = 0
-
-            while len(assembled_ask_depth) > 0 and len(basket_bid_depth) > 0:
-
-                best_assembled_ask, best_assembled_ask_amount = assembled_ask_depth[0] # Hopefully low
-                best_basket_bid, best_basket_bid_amount = basket_bid_depth[0] # Hopefully high
-
-                best_spread = best_basket_bid - best_assembled_ask # Hopefully very positive
-                if best_spread > - self.CLOSING_SPREAD_THRESHOLD[basket]:
-                    max_order_volume -= min(abs(best_assembled_ask_amount), abs(best_basket_bid_amount))
-                    if abs(best_assembled_ask_amount) < abs(best_basket_bid_amount):
-                        basket_bid_depth[0][1] += best_assembled_ask_amount # Plus here since one value is always +ve, other -ve
-                        assembled_ask_depth.pop(0)
-                    elif abs(best_assembled_ask_amount) > abs(best_basket_bid_amount):
-                        assembled_ask_depth[0][1] += best_basket_bid_amount # Plus here since one value is always +ve, other -ve
-                        basket_bid_depth.pop(0)
-                    else:
-                        basket_bid_depth.pop(0)
-                        assembled_ask_depth.pop(0)
+                    
+    # Make a list of how expensive each component will be for each subsequent basket (prices get worse as we progress through the order book)
+    # E.g. how much will first 6 croissants cost, then next 6, etc as far as market allows
+    def component_bids_per_basket(self, state: TradingState, basket: Symbol):
+        component_bids_per_basket = {}
+        for component in self.BASKET_CONTENTS[basket]:
+            buy_order_depth = [list(item) for item in state.order_depths[component].buy_orders.items()]
+            bid_per_basket = [0]
+            counter = 0
+            while True:
+                if buy_order_depth[0][1] > 0:
+                    counter += 1
+                    buy_order_depth[0][1] -= 1
+                    bid_per_basket[-1] += buy_order_depth[0][0]
+                    if counter == self.BASKET_CONTENTS[basket][component]:
+                        counter = 0
+                        bid_per_basket.append(0)
+                elif len(buy_order_depth) > 1:
+                    buy_order_depth.pop(0)
                 else:
+                    bid_per_basket.pop(-1)
                     break
 
-            print(max_order_volume, "   -   ", -position)
-            order_volume = max(max_order_volume, - position)
+            component_bids_per_basket[component] = bid_per_basket
 
+            # for bid in bid_per_basket:
+            #     print(f"Bid per basket {basket} on {component}: {bid}")
+        return component_bids_per_baske
 
-            orders: List[Order] = []
-
-            if order_volume != 0:
-                # Order to sell baskets
-                price = self.worst_price_for_volume(state, basket, order_volume)
-                print(f"Closing long on {basket}: {order_volume} at {price} or better against assembled basket at {top_assembled_ask}.")
-
-                orders.append(Order(basket, price, order_volume))
-
-                # Orders to buy components
-                for component in self.BASKET_CONTENTS[basket].keys():
-                    component_volume = - order_volume * self.BASKET_CONTENTS[basket][component]
-                    orders.append(Order(component, self.worst_price_for_volume(state, component, component_volume), component_volume))
-
-            return orders
-        
-        # Buy back baskets and sell components to close short arbitrage position
-        def close_short_arbitrage(self, state: TradingState, basket: Symbol):
-            orders: List[Order] = []
-            position = state.position[basket]
-
-            # print(f"Closing position {position} of {basket}")
-
-            # Make a list of how expensive each component will be for each subsequent basket (prices get worse as we progress through the order book)
-            # E.g. how much will first 6 croissants cost, then next 6, etc as far as market allows
-
-            component_bids_per_basket = self.component_bids_per_basket(state, basket)
-
-            # Get max number of baskets from shortest supply component
-            max_baskets = min([len(bids) for bids in component_bids_per_basket.values()])
-
-            # Get total prices for each assembled basket equivalent
-            assembled_prices_per_basket = []
-
-            for i in range(max_baskets):
-                assembled_prices_per_basket.append(sum([bids[i] for bids in component_bids_per_basket.values()]))
-
-            # Collate into order_depth list format
-            assembled_bid_depth = [[bid, assembled_prices_per_basket.count(bid)] for bid in sorted(set(assembled_prices_per_basket), reverse=True)]
-            basket_ask_depth = [list(item) for item in state.order_depths[basket].sell_orders.items()]
-
-            top_assembled_bid = assembled_bid_depth[0][0]
-
-            # Find max volume to trade with favorable spread
-            max_order_volume = 0
-
-            while len(assembled_bid_depth) > 0 and len(basket_ask_depth) > 0:
-
-                best_assembled_bid, best_assembled_bid_amount = assembled_bid_depth[0] # Hopefully high
-                best_basket_ask, best_basket_ask_amount = basket_ask_depth[0] # Hopefully low
-
-                best_spread = best_basket_ask - best_assembled_bid # Hopefully very negative
-                if best_spread < self.CLOSING_SPREAD_THRESHOLD[basket]:
-                    max_order_volume += min(abs(best_assembled_bid_amount), abs(best_basket_ask_amount))
-                    if abs(best_assembled_bid_amount) < abs(best_basket_ask_amount):
-                        basket_ask_depth[0][1] += best_assembled_bid_amount # Plus here since one value is always +ve, other -ve
-                        assembled_bid_depth.pop(0)
-                    elif abs(best_assembled_bid_amount) > abs(best_basket_ask_amount):
-                        assembled_bid_depth[0][1] += best_basket_ask_amount # Plus here since one value is always +ve, other -ve
-                        basket_ask_depth.pop(0)
-                    else:
-                        basket_ask_depth.pop(0)
-                        assembled_bid_depth.pop(0)
+    # Make a list of how expensive each component will be for each subsequent basket (prices get worse as we progress through the order book)
+    # E.g. how much will first 6 croissants cost, then next 6, etc as far as market allows
+    def component_asks_per_basket(self, state: TradingState, basket: Symbol):
+        component_asks_per_basket = {}
+        for component in self.BASKET_CONTENTS[basket]:
+            sell_order_depth = [list(item) for item in state.order_depths[component].sell_orders.items()]
+            ask_per_basket = [0]
+            counter = 0
+            while True:
+                if sell_order_depth[0][1] < 0:
+                    counter += 1
+                    sell_order_depth[0][1] += 1
+                    ask_per_basket[-1] += sell_order_depth[0][0]
+                    if counter == self.BASKET_CONTENTS[basket][component]:
+                        counter = 0
+                        ask_per_basket.append(0)
+                elif len(sell_order_depth) > 1:
+                    sell_order_depth.pop(0)
                 else:
+                    ask_per_basket.pop(-1)
                     break
-            
-            print(max_order_volume, "   -   ", -position)
-            order_volume = min(max_order_volume, - position)
 
-            orders: List[Order] = []
+            component_asks_per_basket[component] = ask_per_basket
 
-            if order_volume != 0:
-                # Order to buy baskets
-                price = self.worst_price_for_volume(state, basket, order_volume)
-                print(f"Closing short on {basket}: {order_volume} at {price} or better against assembled basket at {top_assembled_bid}.")
+            # for ask in ask_per_basket:
+            #     print(f"Ask per basket {basket} on {component}: {ask}")
+        return component_asks_per_basket
 
-                orders.append(Order(basket, price, order_volume))
-
-                # Orders to sell components
-                for component in self.BASKET_CONTENTS[basket].keys():
-                    component_volume = - order_volume * self.BASKET_CONTENTS[basket][component]
-                    orders.append(Order(component, self.worst_price_for_volume(state, component, component_volume), component_volume))
-
-            return orders
-            
-                        
-        # Make a list of how expensive each component will be for each subsequent basket (prices get worse as we progress through the order book)
-        # E.g. how much will first 6 croissants cost, then next 6, etc as far as market allows
-        def component_bids_per_basket(self, state: TradingState, basket: Symbol):
-            component_bids_per_basket = {}
-            for component in self.BASKET_CONTENTS[basket]:
-                buy_order_depth = [list(item) for item in state.order_depths[component].buy_orders.items()]
-                bid_per_basket = [0]
-                counter = 0
-                while True:
-                    if buy_order_depth[0][1] > 0:
-                        counter += 1
-                        buy_order_depth[0][1] -= 1
-                        bid_per_basket[-1] += buy_order_depth[0][0]
-                        if counter == self.BASKET_CONTENTS[basket][component]:
-                            counter = 0
-                            bid_per_basket.append(0)
-                    elif len(buy_order_depth) > 1:
-                        buy_order_depth.pop(0)
-                    else:
-                        bid_per_basket.pop(-1)
-                        break
-
-                component_bids_per_basket[component] = bid_per_basket
-
-                # for bid in bid_per_basket:
-                #     print(f"Bid per basket {basket} on {component}: {bid}")
-            return component_bids_per_basket
-
-
-        # Make a list of how expensive each component will be for each subsequent basket (prices get worse as we progress through the order book)
-        # E.g. how much will first 6 croissants cost, then next 6, etc as far as market allows
-        def component_asks_per_basket(self, state: TradingState, basket: Symbol):
-            component_asks_per_basket = {}
-            for component in self.BASKET_CONTENTS[basket]:
-                sell_order_depth = [list(item) for item in state.order_depths[component].sell_orders.items()]
-                ask_per_basket = [0]
-                counter = 0
-                while True:
-                    if sell_order_depth[0][1] < 0:
-                        counter += 1
-                        sell_order_depth[0][1] += 1
-                        ask_per_basket[-1] += sell_order_depth[0][0]
-                        if counter == self.BASKET_CONTENTS[basket][component]:
-                            counter = 0
-                            ask_per_basket.append(0)
-                    elif len(sell_order_depth) > 1:
-                        sell_order_depth.pop(0)
-                    else:
-                        ask_per_basket.pop(-1)
-                        break
-
-                component_asks_per_basket[component] = ask_per_basket
-
-                # for ask in ask_per_basket:
-                #     print(f"Ask per basket {basket} on {component}: {ask}")
-            return component_asks_per_basket
-
-        def arbitrage_volume_limit(self, state: TradingState, basket: Symbol):
-            component_buy_limits = []
-            component_sell_limits = []
-            for product in self.BASKET_CONTENTS[basket].keys():
-                if product in state.position.keys():
-                    position = state.position[product]
-                else:
-                    position = 0
-                component_buy_limits.append((self.LIMITS[product] - position) // self.BASKET_CONTENTS[basket][product])
-                component_sell_limits.append((self.LIMITS[product] + position) // self.BASKET_CONTENTS[basket][product])
-
-            if basket in state.position.keys():
-                position = state.position[basket]
+    def arbitrage_volume_limit(self, state: TradingState, basket: Symbol):
+        component_buy_limits = []
+        component_sell_limits = []
+        for product in self.BASKET_CONTENTS[basket].keys():
+            if product in state.position.keys():
+                position = state.position[product]
             else:
                 position = 0
+            component_buy_limits.append((self.LIMITS[product] - position) // self.BASKET_CONTENTS[basket][product])
+            component_sell_limits.append((self.LIMITS[product] + position) // self.BASKET_CONTENTS[basket][product])
 
-            basket_buy_limit = self.LIMITS[basket] - position
-            basket_sell_limit = (self.LIMITS[basket] + position)
-            max_buy_volume = min(component_sell_limits + [basket_buy_limit])
-            max_sell_volume = min(component_buy_limits + [basket_sell_limit])
-                                
-            return [max_buy_volume, -max_sell_volume]
+        if basket in state.position.keys():
+            position = state.position[basket]
+        else:
+            position = 0
 
-        # The least favourable price to be paid when requesting to trade a volume against the order book. Volume is +ve to buy and -ve to sell
-        def worst_price_for_volume(self, state: TradingState, product: Symbol, volume: int):
+        basket_buy_limit = self.LIMITS[basket] - position
+        basket_sell_limit = (self.LIMITS[basket] + position)
+        max_buy_volume = min(component_sell_limits + [basket_buy_limit])
+        max_sell_volume = min(component_buy_limits + [basket_sell_limit])
+                            
+        return [max_buy_volume, -max_sell_volume]
 
-            if volume > 0:
-                order_depth = [list(item) for item in state.order_depths[product].sell_orders.items()]
-                if volume > - sum([order_depth[i][1] for i in range(len(order_depth))]):
-                    raise ValueError(f"Not enough supply in order book. Volume: {volume}")
-                worst_price = 0
-                while volume > 0:
-                    worst_price = order_depth[0][0]
-                    volume += order_depth[0][1]
-                    order_depth[0][1] += 1
-                    if order_depth[0][1] == 0:
-                        order_depth.pop(0)
-            elif volume < 0:
-                order_depth = [list(item) for item in state.order_depths[product].buy_orders.items()]
-                if volume < - sum([order_depth[i][1] for i in range(len(order_depth))]):
-                    raise ValueError(f"Not enough supply in order book. Volume: {volume}")
-                worst_price = 0
-                while volume < 0:
-                    worst_price = order_depth[0][0]
-                    volume += order_depth[0][1]
-                    order_depth[0][1] -= 1
-                    if order_depth[0][1] == 0:
-                        order_depth.pop(0)
-            else:
-                print("Requested price for volume 0")
-                worst_price = 0
-            return worst_price
-        
-         # --- Final Step ---
-        result = active_orders
-        traderData = jsonpickle.encode(traderObject)
-        return result, conversions, traderData
+    # The least favourable price to be paid when requesting to trade a volume against the order book. Volume is +ve to buy and -ve to sell
+    def worst_price_for_volume(self, state: TradingState, product: Symbol, volume: int):
+
+
+        if volume > 0:
+            order_depth = [list(item) for item in state.order_depths[product].sell_orders.items()]
+            if volume > - sum([order_depth[i][1] for i in range(len(order_depth))]):
+                raise ValueError(f"Not enough supply in order book. Volume: {volume}")
+            worst_price = 0
+            while volume > 0:
+                worst_price = order_depth[0][0]
+                volume += order_depth[0][1]
+                order_depth[0][1] += 1
+                if order_depth[0][1] == 0:
+                    order_depth.pop(0)
+        elif volume < 0:
+            order_depth = [list(item) for item in state.order_depths[product].buy_orders.items()]
+            if volume < - sum([order_depth[i][1] for i in range(len(order_depth))]):
+                raise ValueError(f"Not enough supply in order book. Volume: {volume}")
+            worst_price = 0
+            while volume < 0:
+                worst_price = order_depth[0][0]
+                volume += order_depth[0][1]
+                order_depth[0][1] -= 1
+                if order_depth[0][1] == 0:
+                    order_depth.pop(0)
+        else:
+            print("Requested price for volume 0")
+            worst_price = 0
+        return worst_price
+
+        # --- Final Step ---
