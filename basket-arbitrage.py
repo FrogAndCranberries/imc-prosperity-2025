@@ -197,6 +197,32 @@ class Trader:
             }
         # Returns buy_order_volume, sell_order_volume
 
+    def get_voucher_mid_price(
+        self,
+        product: str,
+        order_depth: OrderDepth,
+        traderData: Dict[str, Any] # Takes the dictionary as argument
+    ) -> float | None:
+            product_state = traderData.get(product, {})
+            prev_price = product_state.get('prev_voucher_price', None)
+
+            if len(order_depth.buy_orders) > 0 and len(order_depth.sell_orders) > 0:
+                best_bid = max(order_depth.buy_orders.keys())
+                best_ask = min(order_depth.sell_orders.keys())
+                mid_price = (best_bid + best_ask) / 2
+
+                # Update the passed dictionary
+                # Ensure product key exists before assigning sub-key (robustness)
+                if product not in traderData:
+                    traderData[product] = {}
+                traderData[product]['prev_voucher_price'] = mid_price
+
+                return mid_price
+            elif prev_price is not None:
+                return prev_price
+            else:
+                return None
+
     def run(self, state: TradingState):
         # Only method required. It takes all buy and sell orders for all symbols as an input, and outputs a list of orders to be sent
         # print("traderData: " + state.traderData)
@@ -237,6 +263,7 @@ class Trader:
             Product.VOLCANIC_ROCK_VOUCHER_10500,
         ]
 
+
         # Ensure keys exist in traderObject
 
         if 'base_iv_history' not in traderObject: traderObject['base_iv_history'] = []
@@ -252,6 +279,7 @@ class Trader:
         rock_mid_price = None
         if rock_order_depth and rock_order_depth.buy_orders and rock_order_depth.sell_orders:
             rock_mid_price = (max(rock_order_depth.buy_orders.keys()) + min(rock_order_depth.sell_orders.keys())) / 2
+        print(f"DEBUG Rock Mid Price: {rock_mid_price}")
 
         if rock_mid_price is None: return {}, conversions, jsonpickle.encode(traderObject)
 
@@ -262,7 +290,7 @@ class Trader:
 
         if tte <= 1e-6: return {}, conversions, jsonpickle.encode(traderObject)
 
-
+        print(tte)
 
         for voucher_product in VOUCHER_PRODUCTS:
             if voucher_product not in state.order_depths: continue
@@ -283,8 +311,9 @@ class Trader:
             try:
                 v_t_raw = BlackScholes.implied_volatility(voucher_mid_price, rock_mid_price, strike, tte)
                 # *** Relaxed IV sanity check ***
-                if not (0.0 <= v_t_raw < 1.5): continue # Check >= 0.0
+                if not (0.0 <= v_t_raw < 1.5): continue 
                 v_t = v_t_raw
+                print(v_t_raw)
             except Exception as e: continue
 
             smile_data_points.append({'m': m_t, 'v': v_t, 'product': voucher_product, 'K': strike, 'price': voucher_mid_price})
@@ -300,7 +329,7 @@ class Trader:
 
             # *** Added check for flat IVs ***
             if np.std(v_values) < 1e-5:
-                pass # Skip fit if flat
+                pass # Skip
             else:
                 try:
                     coeffs = np.polyfit(m_values, v_values, 2)
@@ -314,8 +343,8 @@ class Trader:
 
         # --- Step 3: Generate Orders ---
         active_orders = {}
-        deviation_threshold = 0.005 # -> TUNE THIS
-        trade_size = 10       # -> TUNE THIS
+        deviation_threshold = 0.00000000495 # -> TUNE THIS
+        trade_size = 1      # -> TUNE THIS
 
         if poly_func is not None:
             for point in smile_data_points:
@@ -323,12 +352,25 @@ class Trader:
                 m_t = point['m']
                 v_t = point['v']
                 v_fitted = poly_func(m_t)
-                deviation = v_t - v_fitted
+                strike_price = point['K']
+                # <<< ADD DETAILED LOGGING HERE >>>
+                print(f"--- Calculating Fair Price for K={strike_price} ---", flush=True)
+                print(f"Inputs: rock_mid={rock_mid_price}, strike={strike_price}, tte={tte}, fitted_vol={v_fitted}", flush=True)
+                # <<< END LOGGING >>>
 
+                deviation = v_t - v_fitted
+                print(v_fitted)
+                print(deviation)
                 current_position = state.position.get(voucher_product, 0)
                 limit = self.LIMIT[voucher_product]
                 target_quantity = 0
 
+                try:
+                    fair_voucher_price = BlackScholes.black_scholes_call(rock_mid_price, strike_price, tte, v_fitted)
+                    print(f"Output: fair_price={fair_voucher_price}", flush=True) # See the result if calculation succeeds
+                except Exception as e:
+                    print(f"ERROR calculating fair_voucher_price for K={strike_price}: {e}", flush=True) # Print the specific error
+                    fair_voucher_price = None
                 if deviation < -deviation_threshold:
                     target_quantity = min(trade_size, limit - current_position)
                 elif deviation > deviation_threshold:
@@ -376,15 +418,23 @@ class Trader:
                 total_target_delta_exposure += target_position * delta
             except Exception: continue
 
-        if rock_order_depth is not None:
-            target_rock_position = -total_target_delta_exposure
-            rock_trade_qty = target_rock_position - rock_position
-            rock_hedge_orders = self.generate_hedge_orders(rock_trade_qty, rock_position, rock_order_depth)
-            if rock_hedge_orders:
-                active_orders[Product.VOLCANIC_ROCK] = rock_hedge_orders
+        #if rock_order_depth is not None:
+        #    target_rock_position = -total_target_delta_exposure
+        #    rock_trade_qty = target_rock_position - rock_position
+        #    MIN_HEDGE_QTY = 1 
+        #    if abs(rock_trade_qty) >= MIN_HEDGE_QTY:
+        #        rock_hedge_orders = self.generate_hedge_orders(rock_trade_qty, rock_position, rock_order_depth)
+        #        if rock_hedge_orders:
+        #            active_orders[Product.VOLCANIC_ROCK] = rock_hedge_orders
+        #            pass
+        #        print(rock_trade_qty)
+                
+
 
         # Append orders from BS to result
         for product, order_list in active_orders.items():
+            if product == Product.VOLCANIC_ROCK:
+                continue
             if product in result.keys():
                 result[product] += order_list
             else:
@@ -430,7 +480,6 @@ class Trader:
                 if len(state.order_depths[product].sell_orders) == 0 and len(state.order_depths[product].buy_orders) == 0:
                     skip_arbitrage = True
             if skip_arbitrage:
-                print("skipping arbitrage")
                 continue
 
             # Get midprice spread
@@ -758,32 +807,6 @@ class Trader:
             best_bid_vol + best_ask_vol
         )
 
-    def get_voucher_mid_price(
-        self,
-        product: str,
-        order_depth: OrderDepth,
-        traderData: Dict[str, Any] # Takes the dictionary as argument
-    ) -> float | None:
-            product_state = traderData.get(product, {})
-            prev_price = product_state.get('prev_voucher_price', None)
-
-            if len(order_depth.buy_orders) > 0 and len(order_depth.sell_orders) > 0:
-                best_bid = max(order_depth.buy_orders.keys())
-                best_ask = min(order_depth.sell_orders.keys())
-                mid_price = (best_bid + best_ask) / 2
-
-                # Update the passed dictionary
-                # Ensure product key exists before assigning sub-key (robustness)
-                if product not in traderData:
-                    traderData[product] = {}
-                traderData[product]['prev_voucher_price'] = mid_price
-
-                return mid_price
-            elif prev_price is not None:
-                return prev_price
-            else:
-                return None
-
 
     def generate_hedge_orders( # Keep this as before
         self,
@@ -812,82 +835,6 @@ class Trader:
                 orders.append(Order(Product.VOLCANIC_ROCK, best_bid, -quantity_to_sell))
         return orders
     # --- End Helper Functions ---
-
-
-    # Renamed from rock_voucher_orders
-    def get_voucher_orders(
-        self,
-        product: str, # Added parameter
-        order_depth: OrderDepth,
-        position: int,
-        traderData: Dict[str, Any],
-        volatility: float,
-    ) -> (List[Order], List[Order]): # Return take_orders, make_orders
-        
-        # Access product-specific params and state
-
-        params = self.params[product]
-        limit = self.LIMIT[product]
-        product_state = traderData.get(product, {}) # Get state for this product
-        past_vol = product_state.get('past_voucher_vol', []) # Get past vol for this product
-
-        past_vol.append(volatility)
-        if len(past_vol) > params['std_window']:
-            past_vol.pop(0)
-        
-        # Update state in traderData
-        traderData[product]['past_voucher_vol'] = past_vol 
-
-        if len(past_vol) < params['std_window']:
-            return None, None # Not enough data yet
-
-        vol_std_dev = np.std(past_vol)
-
-        if vol_std_dev < 1e-8:
-            vol_z_score = 0.0
-        else:
-            # Use product-specific mean volatility
-            vol_z_score = (volatility - params['mean_volatility']) / vol_std_dev 
-
-        take_orders = []
-        make_orders = []
-        
-        # Use product-specific zscore threshold
-        if vol_z_score >= params['zscore_threshold']:
-            target_position = -limit
-            if position > target_position: # Need to sell more
-                if len(order_depth.buy_orders) > 0:
-                    best_bid = max(order_depth.buy_orders.keys())
-                    needed_quantity = abs(target_position - position) # How many to sell
-                    available_quantity = order_depth.buy_orders[best_bid]
-                    
-                    take_quantity = min(needed_quantity, available_quantity)
-                    if take_quantity > 0:
-                        take_orders.append(Order(product, best_bid, -take_quantity))
-                        
-                    quote_quantity = needed_quantity - take_quantity
-                    if quote_quantity > 0:
-                        # Quote remaining at the same price for simplicity
-                        make_orders.append(Order(product, best_bid, -quote_quantity))
-
-        elif vol_z_score <= -params['zscore_threshold']:
-            target_position = limit
-            if position < target_position: # Need to buy more
-                if len(order_depth.sell_orders) > 0:
-                    best_ask = min(order_depth.sell_orders.keys())
-                    needed_quantity = abs(target_position - position) # How many to buy
-                    available_quantity = abs(order_depth.sell_orders[best_ask])
-
-                    take_quantity = min(needed_quantity, available_quantity)
-                    if take_quantity > 0:
-                        take_orders.append(Order(product, best_ask, take_quantity))
-                        
-                    quote_quantity = needed_quantity - take_quantity
-                    if quote_quantity > 0:
-                        # Quote remaining at the same price for simplicity
-                        make_orders.append(Order(product, best_ask, quote_quantity))
-
-        return take_orders, make_orders
 
 
     def get_past_returns(
@@ -942,92 +889,6 @@ class Trader:
         return returns_dict
 
 
-    def clear_orders(
-        self,
-        product: str,
-        order_depth: OrderDepth,
-        fair_value: float,
-        clear_width: int,
-        position: int,
-        buy_order_volume: int,
-        sell_order_volume: int,
-    ) -> (List[Order], int, int):
-        orders: List[Order] = []
-        buy_order_volume, sell_order_volume = self.clear_position_order(
-            product,
-            fair_value,
-            clear_width,
-            orders,
-            order_depth,
-            position,
-            buy_order_volume,
-            sell_order_volume,
-        )
-        return orders, buy_order_volume, sell_order_volume
-
-    def get_swmid(self, order_depth) -> float:
-        best_bid = max(order_depth.buy_orders.keys())
-        best_ask = min(order_depth.sell_orders.keys())
-        best_bid_vol = abs(order_depth.buy_orders[best_bid])
-        best_ask_vol = abs(order_depth.sell_orders[best_ask])
-        return (best_bid * best_ask_vol + best_ask * best_bid_vol) / (
-            best_bid_vol + best_ask_vol
-        )
-
-    def get_voucher_mid_price(
-        self,
-        product: str,
-        order_depth: OrderDepth,
-        traderData: Dict[str, Any] # Takes the dictionary as argument
-    ) -> float | None:
-        product_state = traderData.get(product, {})
-        prev_price = product_state.get('prev_voucher_price', None)
-
-        if len(order_depth.buy_orders) > 0 and len(order_depth.sell_orders) > 0:
-            best_bid = max(order_depth.buy_orders.keys())
-            best_ask = min(order_depth.sell_orders.keys())
-            mid_price = (best_bid + best_ask) / 2
-
-            # Update the passed dictionary
-            # Ensure product key exists before assigning sub-key (robustness)
-            if product not in traderData:
-                 traderData[product] = {}
-            traderData[product]['prev_voucher_price'] = mid_price
-
-            return mid_price
-        elif prev_price is not None:
-            return prev_price
-        else:
-            return None
-
-
-    def generate_hedge_orders( # Keep this as before
-        self,
-        rock_trade_qty: float,
-        rock_position: int,
-        rock_order_depth: OrderDepth
-    ) -> List[Order]:
-        # ... (implementation as before) ...
-        orders: List[Order] = []
-        if rock_order_depth is None: return orders
-        rock_limit = self.LIMIT[Product.VOLCANIC_ROCK]
-        rock_trade_qty_int = int(round(rock_trade_qty))
-        if rock_trade_qty_int > 0:
-            max_buy_vol = rock_limit - rock_position
-            if max_buy_vol <= 0: return orders
-            quantity_to_buy = min(rock_trade_qty_int, max_buy_vol)
-            if quantity_to_buy > 0 and len(rock_order_depth.sell_orders) > 0:
-                best_ask = min(rock_order_depth.sell_orders.keys())
-                orders.append(Order(Product.VOLCANIC_ROCK, best_ask, quantity_to_buy))
-        elif rock_trade_qty_int < 0:
-            max_sell_vol = rock_limit + rock_position
-            if max_sell_vol <= 0: return orders
-            quantity_to_sell = min(abs(rock_trade_qty_int), max_sell_vol)
-            if quantity_to_sell > 0 and len(rock_order_depth.buy_orders) > 0:
-                best_bid = max(rock_order_depth.buy_orders.keys())
-                orders.append(Order(Product.VOLCANIC_ROCK, best_bid, -quantity_to_sell))
-        return orders
-    # --- End Helper Functions ---
 
 
     # Renamed from rock_voucher_orders
@@ -1044,14 +905,14 @@ class Trader:
         params = self.params[product]
         limit = self.LIMIT[product]
         product_state = traderData.get(product, {}) # Get state for this product
-        past_vol = product_state.get('past_coupon_vol', []) # Get past vol for this product
+        past_vol = product_state.get('past_voucher_vol', []) #Get past vol for this product
 
         past_vol.append(volatility)
         if len(past_vol) > params['std_window']:
             past_vol.pop(0)
         
         # Update state in traderData
-        traderData[product]['past_coupon_vol'] = past_vol 
+        traderData[product]['past_voucher_vol', []] = past_vol 
 
         if len(past_vol) < params['std_window']:
             return None, None # Not enough data yet
@@ -1104,58 +965,6 @@ class Trader:
 
         return take_orders, make_orders
     
-    def get_past_returns(
-        self,
-        traderObject: Dict[str, Any],
-        order_depths: Dict[str, OrderDepth],
-        timeframes: Dict[str, int],
-    ):
-        returns_dict = {}
-
-        for symbol, timeframe in timeframes.items():
-            traderObject_key = f"{symbol}_price_history"
-            if traderObject_key not in traderObject:
-                traderObject[traderObject_key] = []
-
-            price_history = traderObject[traderObject_key]
-
-            if symbol in order_depths:
-                order_depth = order_depths[symbol]
-                if len(order_depth.buy_orders) > 0 and len(order_depth.sell_orders) > 0:
-                    current_price = (
-                        max(order_depth.buy_orders.keys())
-                        + min(order_depth.sell_orders.keys())
-                    ) / 2
-                else:
-                    if len(price_history) > 0:
-                        current_price = float(price_history[-1])
-                    else:
-                        returns_dict[symbol] = None
-                        continue
-            else:
-                if len(price_history) > 0:
-                    current_price = float(price_history[-1])
-                else:
-                    returns_dict[symbol] = None
-                    continue
-
-            price_history.append(
-                f"{current_price:.1f}"
-            )  # Convert float to string with 1 decimal place
-
-            if len(price_history) > timeframe:
-                price_history.pop(0)
-
-            if len(price_history) == timeframe:
-                past_price = float(price_history[0])  # Convert string back to float
-                returns = (current_price - past_price) / past_price
-                returns_dict[symbol] = returns
-            else:
-                returns_dict[symbol] = None
-
-        return returns_dict
-
-
 
     # Buying baskets and selling components
     def open_long_arbitrage(self, state: TradingState, basket: Symbol):
